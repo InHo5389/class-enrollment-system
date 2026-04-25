@@ -1,5 +1,6 @@
 package classenrollmentsystem.user.controller;
 
+import classenrollmentsystem.common.interceptor.annotation.PublicApi;
 import classenrollmentsystem.user.controller.dto.request.LoginRequest;
 import classenrollmentsystem.user.controller.dto.request.RegisterCreatorRequest;
 import classenrollmentsystem.user.controller.dto.request.SignUpRequest;
@@ -28,6 +29,7 @@ public class UserController {
 
     private final UserService userService;
 
+    @PublicApi
     @PostMapping("/sign-up")
     public ResponseEntity<SignUpResponse> signUp(@RequestBody SignUpRequest request) {
         log.debug("회원가입 요청 - 이메일: {}", request.getEmail());
@@ -36,6 +38,7 @@ public class UserController {
         return ResponseEntity.ok(SignUpResponse.from(userDto));
     }
 
+    @PublicApi
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
         log.debug("로그인 요청 - 이메일: {}", request.getEmail());
