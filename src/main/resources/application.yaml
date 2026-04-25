@@ -1,3 +1,17 @@
 spring:
   application:
     name: class-enrollment-system
+  datasource:
+    url: jdbc:mysql://localhost:3306/class_enrollment_system
+    username: classuser
+    password: classpass123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+        use_sql_comments: true
+    show-sql: false
