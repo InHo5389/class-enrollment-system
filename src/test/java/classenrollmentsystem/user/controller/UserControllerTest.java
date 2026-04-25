@@ -3,8 +3,10 @@ package classenrollmentsystem.user.controller;
 import classenrollmentsystem.common.exception.CustomGlobalException;
 import classenrollmentsystem.common.exception.ErrorType;
 import classenrollmentsystem.user.controller.dto.request.LoginRequest;
+import classenrollmentsystem.user.controller.dto.request.RegisterCreatorRequest;
 import classenrollmentsystem.user.controller.dto.request.SignUpRequest;
 import classenrollmentsystem.user.service.UserService;
+import classenrollmentsystem.user.service.dto.CreatorProfileDto;
 import classenrollmentsystem.user.service.dto.UserDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -112,6 +114,57 @@ class UserControllerTest {
         Mockito.when(userService.getUserById(1L)).thenReturn(userDto);
 
         mockMvc.perform(get("/api/users/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(ErrorType.MISSING_USER_ID_HEADER.getStatus()))
+                .andExpect(jsonPath("$.message").value(ErrorType.MISSING_USER_ID_HEADER.getMessage()));
+    }
+
+    @Test
+    @DisplayName("크리에이터 등록 - 올바른 요청으로 크리에이터를 등록할 수 있다")
+    void registerCreator_success() throws Exception {
+        RegisterCreatorRequest request = RegisterCreatorRequest.from("안녕하세요, 강사입니다.");
+        CreatorProfileDto creatorProfileDto = CreatorProfileDto.builder()
+                .id(1L)
+                .userId(1L)
+                .bio("안녕하세요, 강사입니다.")
+                .build();
+
+        Mockito.when(userService.registerCreator(any())).thenReturn(creatorProfileDto);
+
+        mockMvc.perform(post("/api/users/creator")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1L))
+                .andExpect(jsonPath("$.userId").value(1L))
+                .andExpect(jsonPath("$.bio").value("안녕하세요, 강사입니다."));
+    }
+
+    @Test
+    @DisplayName("크리에이터 등록 - 이미 크리에이터로 등록된 사용자는 400 에러가 반환된다")
+    void registerCreator_fail_duplicate_creator_profile() throws Exception {
+        RegisterCreatorRequest request = RegisterCreatorRequest.from("bio");
+        Mockito.when(userService.registerCreator(any()))
+                .thenThrow(new CustomGlobalException(ErrorType.DUPLICATE_CREATOR_PROFILE));
+
+        mockMvc.perform(post("/api/users/creator")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(ErrorType.DUPLICATE_CREATOR_PROFILE.getStatus()))
+                .andExpect(jsonPath("$.message").value(ErrorType.DUPLICATE_CREATOR_PROFILE.getMessage()));
+    }
+
+    @Test
+    @DisplayName("크리에이터 등록 - 헤더 없이 요청하면 401 에러가 반환된다")
+    void registerCreator_fail_no_header() throws Exception {
+        RegisterCreatorRequest request = RegisterCreatorRequest.from("bio");
+
+        mockMvc.perform(post("/api/users/creator")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(ErrorType.MISSING_USER_ID_HEADER.getStatus()))
                 .andExpect(jsonPath("$.message").value(ErrorType.MISSING_USER_ID_HEADER.getMessage()));

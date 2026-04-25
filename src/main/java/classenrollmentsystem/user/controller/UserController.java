@@ -1,11 +1,14 @@
 package classenrollmentsystem.user.controller;
 
 import classenrollmentsystem.user.controller.dto.request.LoginRequest;
+import classenrollmentsystem.user.controller.dto.request.RegisterCreatorRequest;
 import classenrollmentsystem.user.controller.dto.request.SignUpRequest;
+import classenrollmentsystem.user.controller.dto.response.CreatorProfileResponse;
 import classenrollmentsystem.user.controller.dto.response.SignUpResponse;
 import classenrollmentsystem.user.controller.dto.response.LoginResponse;
 import classenrollmentsystem.user.controller.dto.response.UserResponse;
 import classenrollmentsystem.user.service.UserService;
+import classenrollmentsystem.user.service.dto.CreatorProfileDto;
 import classenrollmentsystem.user.service.dto.UserDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +50,17 @@ public class UserController {
         UserDto userDto = userService.getUserById(userId);
 
         return ResponseEntity.ok(UserResponse.from(userDto));
+    }
+
+    @PostMapping("/creator")
+    public ResponseEntity<CreatorProfileResponse> registerCreator(
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestBody RegisterCreatorRequest request
+    ) {
+        log.debug("크리에이터 등록 요청 - 사용자 ID: {}", userId);
+        CreatorProfileDto creatorProfileDto = userService.registerCreator(request.toDto(userId));
+
+        return ResponseEntity.ok(CreatorProfileResponse.from(creatorProfileDto));
     }
 
 }

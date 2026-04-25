@@ -10,9 +10,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Getter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "creator_profiles")
 public class CreatorProfile extends BaseEntity {
@@ -25,7 +31,14 @@ public class CreatorProfile extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    @Column(columnDefinition = "TEXT", nullable = true)
+    @Column(columnDefinition = "TEXT")
     private String bio;
+
+    public static CreatorProfile create(User user, String bio) {
+        return CreatorProfile.builder()
+                .user(user)
+                .bio(bio)
+                .build();
+    }
 
 }

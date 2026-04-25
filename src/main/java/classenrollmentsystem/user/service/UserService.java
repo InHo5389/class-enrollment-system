@@ -2,13 +2,15 @@ package classenrollmentsystem.user.service;
 
 import classenrollmentsystem.common.exception.CustomGlobalException;
 import classenrollmentsystem.common.exception.ErrorType;
+import classenrollmentsystem.user.entity.CreatorProfile;
+import classenrollmentsystem.user.service.dto.CreatorProfileDto;
 import classenrollmentsystem.user.service.dto.LoginDto;
+import classenrollmentsystem.user.service.dto.RegisterCreatorDto;
 import classenrollmentsystem.user.service.dto.SignUpDto;
 import classenrollmentsystem.user.service.dto.UserDto;
 import classenrollmentsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final CreatorProfileRepository creatorProfileRepository;
     private final PasswordEncoder passwordEncoder;
 
     public UserDto signUp(SignUpDto signUpDto) {
@@ -66,6 +69,27 @@ public class UserService {
 
         log.info("사용자 조회 성공 - 사용자 ID: {}, 이메일: {}", user.getId(), user.getEmail());
         return UserDto.from(user);
+    }
+
+    public CreatorProfileDto registerCreator(RegisterCreatorDto dto) {
+        log.info("크리에이터 등록 시작 - 사용자 ID: {}", dto.getUserId());
+
+        if (creatorProfileRepository.existsByUserId(dto.getUserId())) {
+            log.warn("이미 크리에이터로 등록된 사용자 - 사용자 ID: {}", dto.getUserId());
+            throw new CustomGlobalException(ErrorType.DUPLICATE_CREATOR_PROFILE);
+        }
+
+        User user = userRepository.findById(dto.getUserId())
+                .orElseThrow(() -> {
+                    log.warn("존재하지 않는 사용자의 크리에이터 등록 시도 - 사용자 ID: {}", dto.getUserId());
+                    return new CustomGlobalException(ErrorType.USER_NOT_FOUND);
+                });
+
+        CreatorProfile creatorProfile = CreatorProfile.create(user, dto.getBio());
+        CreatorProfile saved = creatorProfileRepository.save(creatorProfile);
+
+        log.info("크리에이터 등록 완료 - 사용자 ID: {}, 크리에이터 프로필 ID: {}", dto.getUserId(), saved.getId());
+        return CreatorProfileDto.from(saved);
     }
 
 }

@@ -3,9 +3,13 @@ package classenrollmentsystem.user.service;
 import classenrollmentsystem.common.exception.CustomGlobalException;
 import classenrollmentsystem.common.exception.ErrorType;
 import classenrollmentsystem.user.controller.dto.request.LoginRequest;
+import classenrollmentsystem.user.controller.dto.request.RegisterCreatorRequest;
 import classenrollmentsystem.user.controller.dto.request.SignUpRequest;
+import classenrollmentsystem.user.entity.CreatorProfile;
 import classenrollmentsystem.user.entity.User;
+import classenrollmentsystem.user.service.dto.CreatorProfileDto;
 import classenrollmentsystem.user.service.dto.LoginDto;
+import classenrollmentsystem.user.service.dto.RegisterCreatorDto;
 import classenrollmentsystem.user.service.dto.SignUpDto;
 import classenrollmentsystem.user.service.dto.UserDto;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +34,9 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private CreatorProfileRepository creatorProfileRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -173,6 +180,64 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.getUserById(999L))
+                .isInstanceOf(CustomGlobalException.class)
+                .extracting("errorType")
+                .isEqualTo(ErrorType.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("크리에이터 등록 - 사용자를 크리에이터로 등록할 수 있다")
+    void registerCreator_success() {
+        // given
+        String bio = "안녕하세요, 강사입니다.";
+        RegisterCreatorDto dto = RegisterCreatorDto.of(1L, bio);
+        User user = User.builder()
+                .id(1L)
+                .email("creator@example.com")
+                .passwordHash("hashedPassword")
+                .name("Creator User")
+                .build();
+        CreatorProfile creatorProfile = CreatorProfile.create(user, bio);
+
+        when(creatorProfileRepository.existsByUserId(1L)).thenReturn(false);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(creatorProfileRepository.save(any(CreatorProfile.class))).thenReturn(creatorProfile);
+
+        // when
+        CreatorProfileDto response = userService.registerCreator(dto);
+
+        // then
+        assertThat(response).isNotNull();
+        assertThat(response.getBio()).isEqualTo(bio);
+        assertThat(response.getUserId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("크리에이터 등록 - 이미 크리에이터로 등록된 사용자는 CustomGlobalException을 발생시킨다")
+    void registerCreator_fail_duplicate_creator_profile() {
+        // given
+        RegisterCreatorDto dto = RegisterCreatorDto.of(1L, "bio");
+
+        when(creatorProfileRepository.existsByUserId(1L)).thenReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> userService.registerCreator(dto))
+                .isInstanceOf(CustomGlobalException.class)
+                .extracting("errorType")
+                .isEqualTo(ErrorType.DUPLICATE_CREATOR_PROFILE);
+    }
+
+    @Test
+    @DisplayName("크리에이터 등록 - 존재하지 않는 사용자로 등록하면 CustomGlobalException을 발생시킨다")
+    void registerCreator_fail_user_not_found() {
+        // given
+        RegisterCreatorDto dto = RegisterCreatorDto.of(999L, "bio");
+
+        when(creatorProfileRepository.existsByUserId(999L)).thenReturn(false);
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> userService.registerCreator(dto))
                 .isInstanceOf(CustomGlobalException.class)
                 .extracting("errorType")
                 .isEqualTo(ErrorType.USER_NOT_FOUND);
