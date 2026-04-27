@@ -7,6 +7,7 @@ import classenrollmentsystem.course.entity.CourseStatus;
 import classenrollmentsystem.course.service.dto.CourseDetailDto;
 import classenrollmentsystem.course.service.dto.CourseDto;
 import classenrollmentsystem.course.service.dto.CreateCourseDto;
+import classenrollmentsystem.enrollment.service.EnrollmentCountRepository;
 import classenrollmentsystem.user.entity.CreatorProfile;
 import classenrollmentsystem.user.service.CreatorProfileRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class CourseService {
 
     private final CourseRepository courseRepository;
     private final CreatorProfileRepository creatorProfileRepository;
+    private final EnrollmentCountRepository enrollmentCountRepository;
 
     @Transactional
     public CourseDto createCourse(CreateCourseDto dto) {
@@ -60,7 +62,7 @@ public class CourseService {
                 ? courseRepository.findAllByStatus(status, pageable)
                 : courseRepository.findAll(pageable);
 
-        return courses.map(course -> CourseDto.of(course, 0));
+        return courses.map(course -> CourseDto.of(course, enrollmentCountRepository.getEnrollmentCount(course.getId())));
     }
 
     @Transactional(readOnly = true)
@@ -73,7 +75,13 @@ public class CourseService {
                     return new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
                 });
 
-        return CourseDetailDto.of(course, 0);
+        Long ownerUserId = course.getCreatorProfile().getUser().getId();
+        if (course.getStatus() == CourseStatus.DRAFT && !ownerUserId.equals(userId)) {
+            log.warn("타인의 DRAFT 강의 조회 시도 - 강의 ID: {}, 요청자 ID: {}", courseId, userId);
+            throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
+        }
+
+        return CourseDetailDto.of(course, enrollmentCountRepository.getEnrollmentCount(courseId));
     }
 
     @Transactional
@@ -96,7 +104,7 @@ public class CourseService {
         Course saved = courseRepository.save(course);
 
         log.info("강의 상태 변경 완료 - 강의 ID: {}, 상태: {}", saved.getId(), saved.getStatus());
-        return CourseDto.of(saved, 0);
+        return CourseDto.of(saved, enrollmentCountRepository.getEnrollmentCount(saved.getId()));
     }
 
     private void validateCourseInput(CreateCourseDto dto) {
