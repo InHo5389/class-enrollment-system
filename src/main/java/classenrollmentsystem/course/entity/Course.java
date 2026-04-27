@@ -59,6 +59,7 @@ public class Course extends BaseEntity {
     @Column(nullable = false, length = 20)
     private CourseStatus status;
 
+
     public static Course create(
             CreatorProfile creatorProfile,
             String title,
@@ -81,22 +82,8 @@ public class Course extends BaseEntity {
     }
 
     public void changeStatus(CourseStatus newStatus) {
-        validateStatusTransition(newStatus);
+        this.status.validateTransitTo(newStatus);
         this.status = newStatus;
-    }
-
-    private void validateStatusTransition(CourseStatus newStatus) {
-        boolean valid = switch (this.status) {
-            case DRAFT -> newStatus == CourseStatus.OPEN;
-            case OPEN -> newStatus == CourseStatus.CLOSED;
-            case CLOSED -> false;
-        };
-
-        if (!valid) {
-            throw new classenrollmentsystem.common.exception.CustomGlobalException(
-                    classenrollmentsystem.common.exception.ErrorType.INVALID_COURSE_STATUS_TRANSITION
-            );
-        }
     }
 
 }
