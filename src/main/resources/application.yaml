@@ -1,6 +1,10 @@
 spring:
   application:
     name: class-enrollment-system
+  data:
+    redis:
+      host: localhost
+      port: 6379
   datasource:
     url: jdbc:mysql://localhost:3306/class_enrollment_system
     username: classuser
@@ -8,10 +12,13 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
         use_sql_comments: true
     show-sql: false
+
+enrollment:
+  cancel-deadline-days: 7
