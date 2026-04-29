@@ -168,6 +168,8 @@ Redis TTL을 키 단위로 걸면 강의 전체 Active Queue가 통째로 사라
 ### 분당 2,100명 한계값 산정 근거
 
 대기열 없이 시스템을 먼저 부하 테스트하여 안정적인 한계 TPS를 측정했습니다. 로컬 환경 기준으로 200 TPS가 측정되었습니다.
+<img width="943" height="444" alt="image" src="https://github.com/user-attachments/assets/1af84c96-13ba-4e9d-93e0-b9424096a871" />
+
 
 수강 신청 시나리오에서 사용자 한 명은 최소 4개의 API를 호출합니다.
 
