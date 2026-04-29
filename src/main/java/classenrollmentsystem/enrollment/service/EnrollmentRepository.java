@@ -19,4 +19,6 @@ public interface EnrollmentRepository {
 
     Page<Enrollment> findAllByUserId(Long userId, Pageable pageable);
 
+    Page<Enrollment> findAllByCourseIdAndStatus(Long courseId, EnrollmentStatus status, Pageable pageable);
+
 }

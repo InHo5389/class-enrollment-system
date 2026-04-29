@@ -1,6 +1,7 @@
 package classenrollmentsystem.enrollment.controller;
 
 import classenrollmentsystem.common.dto.PageResponse;
+import classenrollmentsystem.common.interceptor.annotation.RequireCreator;
 import classenrollmentsystem.enrollment.controller.dto.request.EnrollRequest;
 import classenrollmentsystem.enrollment.controller.dto.response.EnrollmentResponse;
 import classenrollmentsystem.enrollment.service.EnrollmentService;
@@ -66,6 +67,18 @@ public class EnrollmentController {
     ) {
         log.debug("내 수강 신청 목록 조회 요청 - 사용자 ID: {}", userId);
         Page<EnrollmentDto> dtos = enrollmentService.getMyEnrollments(userId, pageable);
+        return ResponseEntity.ok(PageResponse.from(dtos.map(EnrollmentResponse::from)));
+    }
+
+    @RequireCreator
+    @GetMapping("/courses/{courseId}")
+    public ResponseEntity<PageResponse<EnrollmentResponse>> getCourseEnrollments(
+            @RequestHeader("X-User-Id") Long userId,
+            @PathVariable Long courseId,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        log.debug("강의별 수강생 목록 조회 요청 - 강의 ID: {}, 요청자 ID: {}", courseId, userId);
+        Page<EnrollmentDto> dtos = enrollmentService.getCourseEnrollments(courseId, userId, pageable);
         return ResponseEntity.ok(PageResponse.from(dtos.map(EnrollmentResponse::from)));
     }
 

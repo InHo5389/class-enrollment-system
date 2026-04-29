@@ -130,6 +130,20 @@ public class EnrollmentService {
         return enrollmentRepository.findAllByUserId(userId, pageable).map(EnrollmentDto::from);
     }
 
+    @Transactional(readOnly = true)
+    public Page<EnrollmentDto> getCourseEnrollments(Long courseId, Long userId, Pageable pageable) {
+        log.debug("강의별 수강생 목록 조회 - 강의 ID: {}, 요청자 ID: {}", courseId, userId);
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new CustomGlobalException(ErrorType.COURSE_NOT_FOUND));
+
+        if (!course.getCreatorProfile().getUser().getId().equals(userId)) {
+            throw new CustomGlobalException(ErrorType.COURSE_NOT_OWNER);
+        }
+
+        return enrollmentRepository.findAllByCourseIdAndStatus(courseId, EnrollmentStatus.CONFIRMED, pageable).map(EnrollmentDto::from);
+    }
+
     private void validateCancelDeadline(Enrollment enrollment, LocalDateTime currentDateTime) {
         LocalDateTime confirmedAt = enrollment.getConfirmedAt();
         LocalDateTime deadline = confirmedAt.plusDays(cancelDeadlineDays);
