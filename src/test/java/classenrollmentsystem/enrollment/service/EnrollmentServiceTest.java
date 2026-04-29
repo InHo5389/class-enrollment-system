@@ -456,4 +456,60 @@ class EnrollmentServiceTest {
 
         assertThat(result.getContent()).isEmpty();
     }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 조회 - 크리에이터 본인 강의이면 CONFIRMED 상태의 수강생 목록이 페이지 형태로 반환된다")
+    void getCourseEnrollments_success() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<Enrollment> enrollmentPage = new PageImpl<>(List.of(confirmedEnrollment));
+
+        when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
+        when(enrollmentRepository.findAllByCourseIdAndStatus(1L, EnrollmentStatus.CONFIRMED, pageable))
+                .thenReturn(enrollmentPage);
+
+        Page<EnrollmentDto> result = enrollmentService.getCourseEnrollments(1L, 2L, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getStatus()).isEqualTo(EnrollmentStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 조회 - 존재하지 않는 강의 ID로 요청하면 COURSE_NOT_FOUND 예외가 발생한다")
+    void getCourseEnrollments_fail_course_not_found() {
+        PageRequest pageable = PageRequest.of(0, 10);
+
+        when(courseRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> enrollmentService.getCourseEnrollments(999L, 2L, pageable))
+                .isInstanceOf(CustomGlobalException.class)
+                .extracting("errorType")
+                .isEqualTo(ErrorType.COURSE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 조회 - 본인 강의가 아니면 COURSE_NOT_OWNER 예외가 발생한다")
+    void getCourseEnrollments_fail_not_owner() {
+        PageRequest pageable = PageRequest.of(0, 10);
+
+        when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
+
+        assertThatThrownBy(() -> enrollmentService.getCourseEnrollments(1L, 99L, pageable))
+                .isInstanceOf(CustomGlobalException.class)
+                .extracting("errorType")
+                .isEqualTo(ErrorType.COURSE_NOT_OWNER);
+    }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 조회 - CONFIRMED 수강생이 없으면 빈 페이지가 반환된다")
+    void getCourseEnrollments_empty() {
+        PageRequest pageable = PageRequest.of(0, 10);
+
+        when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
+        when(enrollmentRepository.findAllByCourseIdAndStatus(1L, EnrollmentStatus.CONFIRMED, pageable))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Page<EnrollmentDto> result = enrollmentService.getCourseEnrollments(1L, 2L, pageable);
+
+        assertThat(result.getContent()).isEmpty();
+    }
 }

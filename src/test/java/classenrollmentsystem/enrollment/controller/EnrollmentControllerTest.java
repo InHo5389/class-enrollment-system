@@ -294,4 +294,67 @@ class EnrollmentControllerTest {
                 .andExpect(jsonPath("$.status").value(ErrorType.MISSING_USER_ID_HEADER.getStatus()))
                 .andExpect(jsonPath("$.message").value(ErrorType.MISSING_USER_ID_HEADER.getMessage()));
     }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 API - 크리에이터 권한이 있으면 CONFIRMED 수강생 목록이 페이지 형태로 반환된다")
+    void getCourseEnrollments_success() throws Exception {
+        Page<EnrollmentDto> page = new PageImpl<>(List.of(buildEnrollmentDto(EnrollmentStatus.CONFIRMED)));
+        when(creatorProfileRepository.existsByUserId(1L)).thenReturn(true);
+        when(enrollmentService.getCourseEnrollments(eq(1L), eq(1L), any(Pageable.class))).thenReturn(page);
+
+        mockMvc.perform(get("/api/enrollments/courses/1")
+                        .header("X-User-Id", 1L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 API - X-User-Id 헤더가 없으면 401을 반환한다")
+    void getCourseEnrollments_fail_no_auth_header() throws Exception {
+        mockMvc.perform(get("/api/enrollments/courses/1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(ErrorType.MISSING_USER_ID_HEADER.getStatus()))
+                .andExpect(jsonPath("$.message").value(ErrorType.MISSING_USER_ID_HEADER.getMessage()));
+    }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 API - 크리에이터 권한이 없으면 403을 반환한다")
+    void getCourseEnrollments_fail_not_creator() throws Exception {
+        when(creatorProfileRepository.existsByUserId(1L)).thenReturn(false);
+
+        mockMvc.perform(get("/api/enrollments/courses/1")
+                        .header("X-User-Id", 1L))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(ErrorType.NOT_CREATOR.getStatus()))
+                .andExpect(jsonPath("$.message").value(ErrorType.NOT_CREATOR.getMessage()));
+    }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 API - 본인 강의가 아니면 403을 반환한다")
+    void getCourseEnrollments_fail_not_owner() throws Exception {
+        when(creatorProfileRepository.existsByUserId(1L)).thenReturn(true);
+        when(enrollmentService.getCourseEnrollments(anyLong(), anyLong(), any(Pageable.class)))
+                .thenThrow(new CustomGlobalException(ErrorType.COURSE_NOT_OWNER));
+
+        mockMvc.perform(get("/api/enrollments/courses/1")
+                        .header("X-User-Id", 1L))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(ErrorType.COURSE_NOT_OWNER.getStatus()))
+                .andExpect(jsonPath("$.message").value(ErrorType.COURSE_NOT_OWNER.getMessage()));
+    }
+
+    @Test
+    @DisplayName("강의별 수강생 목록 API - 존재하지 않는 강의 ID로 요청하면 404를 반환한다")
+    void getCourseEnrollments_fail_course_not_found() throws Exception {
+        when(creatorProfileRepository.existsByUserId(1L)).thenReturn(true);
+        when(enrollmentService.getCourseEnrollments(anyLong(), anyLong(), any(Pageable.class)))
+                .thenThrow(new CustomGlobalException(ErrorType.COURSE_NOT_FOUND));
+
+        mockMvc.perform(get("/api/enrollments/courses/999")
+                        .header("X-User-Id", 1L))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(ErrorType.COURSE_NOT_FOUND.getStatus()))
+                .andExpect(jsonPath("$.message").value(ErrorType.COURSE_NOT_FOUND.getMessage()));
+    }
 }
