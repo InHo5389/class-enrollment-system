@@ -4,6 +4,8 @@ import classenrollmentsystem.course.entity.Course;
 import classenrollmentsystem.course.entity.CourseStatus;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,9 +13,12 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CourseDetailDto {
 
     private Long id;
+    private Long ownerId;
     private String creatorName;
     private String creatorBio;
     private String title;
@@ -30,6 +35,7 @@ public class CourseDetailDto {
     public static CourseDetailDto of(Course course, int currentEnrollment) {
         return CourseDetailDto.builder()
                 .id(course.getId())
+                .ownerId(course.getCreatorProfile().getUser().getId())
                 .creatorName(course.getCreatorProfile().getUser().getName())
                 .creatorBio(course.getCreatorProfile().getBio())
                 .title(course.getTitle())

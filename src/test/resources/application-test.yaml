@@ -17,3 +17,7 @@ spring:
 
 enrollment:
   cancel-deadline-days: 7
+
+course:
+  cache:
+    ttl-seconds: 1800

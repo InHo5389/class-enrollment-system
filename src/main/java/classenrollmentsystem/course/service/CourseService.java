@@ -17,6 +17,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -25,6 +27,7 @@ public class CourseService {
     private final CourseRepository courseRepository;
     private final CreatorProfileRepository creatorProfileRepository;
     private final EnrollmentCountRepository enrollmentCountRepository;
+    private final CourseCacheRepository courseCacheRepository;
 
     @Transactional
     public CourseDto createCourse(CreateCourseDto dto) {
@@ -69,6 +72,17 @@ public class CourseService {
     public CourseDetailDto getCourse(Long courseId, Long userId) {
         log.debug("강의 상세 조회 - 강의 ID: {}", courseId);
 
+        Optional<CourseDetailDto> cached = courseCacheRepository.findById(courseId);
+        if (cached.isPresent()) {
+            CourseDetailDto dto = cached.get();
+            if (dto.getStatus() == CourseStatus.DRAFT && !dto.getOwnerId().equals(userId)) {
+                log.warn("타인의 DRAFT 강의 조회 시도 (캐시) - 강의 ID: {}, 요청자 ID: {}", courseId, userId);
+                throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
+            }
+            log.debug("강의 캐시 히트 - 강의 ID: {}", courseId);
+            return dto;
+        }
+
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> {
                     log.warn("존재하지 않는 강의 조회 - 강의 ID: {}", courseId);
@@ -81,7 +95,11 @@ public class CourseService {
             throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
         }
 
-        return CourseDetailDto.of(course, enrollmentCountRepository.getEnrollmentCount(courseId));
+        CourseDetailDto dto = CourseDetailDto.of(course, enrollmentCountRepository.getEnrollmentCount(courseId));
+        if (course.getStatus() != CourseStatus.DRAFT) {
+            courseCacheRepository.save(dto);
+        }
+        return dto;
     }
 
     @Transactional
@@ -103,6 +121,7 @@ public class CourseService {
         course.changeStatus(newStatus);
         Course saved = courseRepository.save(course);
 
+        courseCacheRepository.evict(courseId);
         log.info("강의 상태 변경 완료 - 강의 ID: {}, 상태: {}", saved.getId(), saved.getStatus());
         return CourseDto.of(saved, enrollmentCountRepository.getEnrollmentCount(saved.getId()));
     }
