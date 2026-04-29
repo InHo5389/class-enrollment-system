@@ -29,6 +29,7 @@ public class EnrollmentService {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final EnrollmentCountRepository enrollmentCountRepository;
+    private final WaitingQueueService waitingQueueService;
 
     @Value("${enrollment.cancel-deadline-days}")
     private int cancelDeadlineDays;
@@ -36,6 +37,8 @@ public class EnrollmentService {
     @Transactional
     public EnrollmentDto enroll(Long userId, Long courseId) {
         log.info("수강 신청 시작 - 사용자 ID: {}, 강의 ID: {}", userId, courseId);
+
+        waitingQueueService.validateActiveToken(courseId, userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
@@ -73,6 +76,8 @@ public class EnrollmentService {
 
         Enrollment enrollment = Enrollment.create(user, course);
         Enrollment saved = enrollmentRepository.save(enrollment);
+
+        waitingQueueService.releaseActiveToken(courseId, userId);
 
         log.info("수강 신청 완료 - 수강 신청 ID: {}, 사용자 ID: {}, 강의 ID: {}", saved.getId(), userId, courseId);
         return EnrollmentDto.from(saved);

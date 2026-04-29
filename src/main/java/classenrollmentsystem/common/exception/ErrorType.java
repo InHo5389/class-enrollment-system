@@ -30,7 +30,9 @@ public enum ErrorType {
     ENROLLMENT_CAPACITY_EXCEEDED(400, "수강 정원이 초과되었습니다."),
     ENROLLMENT_INVALID_STATUS_TRANSITION(400, "허용되지 않는 수강 신청 상태 변경입니다."),
     ENROLLMENT_CANCEL_NOT_ALLOWED(400, "취소할 수 없는 상태입니다."),
-    ENROLLMENT_CANCEL_DEADLINE_EXCEEDED(400, "취소 가능 기간이 지났습니다. 결제 후 7일 이내에만 취소할 수 있습니다.");
+    ENROLLMENT_CANCEL_DEADLINE_EXCEEDED(400, "취소 가능 기간이 지났습니다. 결제 후 7일 이내에만 취소할 수 있습니다."),
+
+    QUEUE_TOKEN_NOT_ACTIVE(403, "대기열을 통해 입장 허가를 받은 후 수강 신청할 수 있습니다.");
 
     private final int status;
     private final String message;
