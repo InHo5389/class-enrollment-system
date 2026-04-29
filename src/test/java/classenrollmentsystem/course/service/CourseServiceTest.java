@@ -31,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +46,9 @@ class CourseServiceTest {
 
     @Mock
     private EnrollmentCountRepository enrollmentCountRepository;
+
+    @Mock
+    private CourseCacheRepository courseCacheRepository;
 
     @InjectMocks
     private CourseService courseService;
@@ -253,6 +258,7 @@ class CourseServiceTest {
     @Test
     @DisplayName("강의 상세 조회 - 강의 작성자는 본인의 DRAFT 강의를 조회할 수 있다")
     void getCourse_success_owner_sees_draft() {
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.empty());
         when(courseRepository.findById(1L)).thenReturn(Optional.of(course));
         when(enrollmentCountRepository.getEnrollmentCount(1L)).thenReturn(3);
 
@@ -268,6 +274,7 @@ class CourseServiceTest {
     @Test
     @DisplayName("강의 상세 조회 - 타인이 DRAFT 강의를 조회하면 COURSE_NOT_FOUND 예외가 발생한다")
     void getCourse_fail_draft_not_owner() {
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.empty());
         when(courseRepository.findById(1L)).thenReturn(Optional.of(course));
 
         assertThatThrownBy(() -> courseService.getCourse(1L, 99L))
@@ -279,6 +286,7 @@ class CourseServiceTest {
     @Test
     @DisplayName("강의 상세 조회 - userId가 null이면 DRAFT 강의는 COURSE_NOT_FOUND 예외가 발생한다")
     void getCourse_fail_draft_anonymous() {
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.empty());
         when(courseRepository.findById(1L)).thenReturn(Optional.of(course));
 
         assertThatThrownBy(() -> courseService.getCourse(1L, null))
@@ -302,6 +310,7 @@ class CourseServiceTest {
                 .status(CourseStatus.OPEN)
                 .build();
 
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.empty());
         when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
         when(enrollmentCountRepository.getEnrollmentCount(1L)).thenReturn(0);
 
@@ -313,12 +322,100 @@ class CourseServiceTest {
     @Test
     @DisplayName("강의 상세 조회 - 존재하지 않는 강의를 조회하면 COURSE_NOT_FOUND 예외가 발생한다")
     void getCourse_fail_not_found() {
+        when(courseCacheRepository.findById(999L)).thenReturn(Optional.empty());
         when(courseRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> courseService.getCourse(999L, 1L))
                 .isInstanceOf(CustomGlobalException.class)
                 .extracting("errorType")
                 .isEqualTo(ErrorType.COURSE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (캐시) - 캐시 히트 시 DB를 조회하지 않고 캐시 결과를 반환한다")
+    void getCourse_cache_hit_skips_db() {
+        CourseDetailDto cached = CourseDetailDto.builder()
+                .id(1L)
+                .ownerId(1L)
+                .creatorName("Creator")
+                .creatorBio("강의 소개")
+                .title("Spring Boot 완벽 가이드")
+                .price(new BigDecimal("49900"))
+                .maxCapacity(30)
+                .currentEnrollment(5)
+                .startDate(LocalDate.of(2026, 5, 1))
+                .endDate(LocalDate.of(2026, 6, 30))
+                .status(CourseStatus.OPEN)
+                .build();
+
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.of(cached));
+
+        CourseDetailDto result = courseService.getCourse(1L, null);
+
+        assertThat(result.getTitle()).isEqualTo("Spring Boot 완벽 가이드");
+        assertThat(result.getCurrentEnrollment()).isEqualTo(5);
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (캐시) - 캐시 미스 후 OPEN 강의를 조회하면 캐시에 저장한다")
+    void getCourse_cache_miss_saves_to_cache() {
+        Course openCourse = Course.builder()
+                .id(1L)
+                .creatorProfile(creatorProfile)
+                .title("Spring Boot 완벽 가이드")
+                .description("초급부터 고급까지")
+                .price(new BigDecimal("49900"))
+                .maxCapacity(30)
+                .startDate(LocalDate.of(2026, 5, 1))
+                .endDate(LocalDate.of(2026, 6, 30))
+                .status(CourseStatus.OPEN)
+                .build();
+
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.empty());
+        when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
+        when(enrollmentCountRepository.getEnrollmentCount(1L)).thenReturn(0);
+
+        courseService.getCourse(1L, null);
+
+        verify(courseCacheRepository).save(any(CourseDetailDto.class));
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (캐시) - 캐시 미스 후 DRAFT 강의를 조회하면 캐시에 저장하지 않는다")
+    void getCourse_draft_not_saved_to_cache() {
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.empty());
+        when(courseRepository.findById(1L)).thenReturn(Optional.of(course));
+        when(enrollmentCountRepository.getEnrollmentCount(1L)).thenReturn(0);
+
+        courseService.getCourse(1L, 1L);
+
+        verify(courseCacheRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (캐시) - 캐시된 DRAFT 강의를 타인이 조회하면 COURSE_NOT_FOUND 예외가 발생한다")
+    void getCourse_cached_draft_rejects_non_owner() {
+        CourseDetailDto cachedDraft = CourseDetailDto.builder()
+                .id(1L)
+                .ownerId(1L)
+                .creatorName("Creator")
+                .title("Spring Boot 완벽 가이드")
+                .price(new BigDecimal("49900"))
+                .maxCapacity(30)
+                .startDate(LocalDate.of(2026, 5, 1))
+                .endDate(LocalDate.of(2026, 6, 30))
+                .status(CourseStatus.DRAFT)
+                .build();
+
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.of(cachedDraft));
+
+        assertThatThrownBy(() -> courseService.getCourse(1L, 99L))
+                .isInstanceOf(CustomGlobalException.class)
+                .extracting("errorType")
+                .isEqualTo(ErrorType.COURSE_NOT_FOUND);
+
+        verify(courseRepository, never()).findById(any());
     }
 
     // ========================
@@ -348,6 +445,7 @@ class CourseServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(CourseStatus.OPEN);
         assertThat(result.getCurrentEnrollment()).isEqualTo(0);
+        verify(courseCacheRepository).evict(1L);
     }
 
     @Test
