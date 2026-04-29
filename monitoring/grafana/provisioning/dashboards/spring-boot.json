@@ -1,0 +1,213 @@
+{
+  "title": "Class Enrollment System",
+  "uid": "class-enrollment",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "TPS (초당 요청 수)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"class-enrollment-system\"}[10s]))",
+          "legendFormat": "전체 TPS"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"class-enrollment-system\", uri=\"/api/enrollments\", method=\"POST\"}[10s]))",
+          "legendFormat": "수강 신청 TPS"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "응답 시간 (P50 / P95 / P99)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"class-enrollment-system\"}[10s])) by (le))",
+          "legendFormat": "P50"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"class-enrollment-system\"}[10s])) by (le))",
+          "legendFormat": "P95"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"class-enrollment-system\"}[10s])) by (le))",
+          "legendFormat": "P99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "에러율",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"class-enrollment-system\", status=~\"5..\"}[10s])) / sum(rate(http_server_requests_seconds_count{application=\"class-enrollment-system\"}[10s])) * 100",
+          "legendFormat": "5xx 에러율 (%)"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"class-enrollment-system\", status=~\"4..\"}[10s])) / sum(rate(http_server_requests_seconds_count{application=\"class-enrollment-system\"}[10s])) * 100",
+          "legendFormat": "4xx 에러율 (%)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "DB 커넥션 풀 (HikariCP)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "hikaricp_connections_active{application=\"class-enrollment-system\"}",
+          "legendFormat": "사용 중"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "hikaricp_connections_idle{application=\"class-enrollment-system\"}",
+          "legendFormat": "유휴"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "hikaricp_connections_pending{application=\"class-enrollment-system\"}",
+          "legendFormat": "대기 중 (풀 고갈 신호)"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "hikaricp_connections_max{application=\"class-enrollment-system\"}",
+          "legendFormat": "최대 풀 크기"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "JVM 힙 메모리",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "jvm_memory_used_bytes{application=\"class-enrollment-system\", area=\"heap\"}",
+          "legendFormat": "사용 중"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "jvm_memory_max_bytes{application=\"class-enrollment-system\", area=\"heap\"}",
+          "legendFormat": "최대"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "GC 발생 빈도",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(jvm_gc_pause_seconds_count{application=\"class-enrollment-system\"}[10s])) by (action, cause)",
+          "legendFormat": "{{action}} - {{cause}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "JVM 스레드",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "jvm_threads_live_threads{application=\"class-enrollment-system\"}",
+          "legendFormat": "활성 스레드"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "jvm_threads_states_threads{application=\"class-enrollment-system\", state=\"blocked\"}",
+          "legendFormat": "블로킹된 스레드"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "API별 TPS",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"class-enrollment-system\"}[10s])) by (uri, method)",
+          "legendFormat": "{{method}} {{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2 }
+        }
+      }
+    }
+  ]
+}
