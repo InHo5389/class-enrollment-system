@@ -21,3 +21,4 @@ enrollment:
 course:
   cache:
     ttl-seconds: 1800
+    null-ttl-seconds: 60

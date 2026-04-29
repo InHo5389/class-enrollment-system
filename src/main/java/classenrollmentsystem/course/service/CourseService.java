@@ -74,31 +74,65 @@ public class CourseService {
 
         Optional<CourseDetailDto> cached = courseCacheRepository.findById(courseId);
         if (cached.isPresent()) {
-            CourseDetailDto dto = cached.get();
-            if (dto.getStatus() == CourseStatus.DRAFT && !dto.getOwnerId().equals(userId)) {
-                log.warn("타인의 DRAFT 강의 조회 시도 (캐시) - 강의 ID: {}, 요청자 ID: {}", courseId, userId);
-                throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
-            }
-            log.debug("강의 캐시 히트 - 강의 ID: {}", courseId);
-            return dto;
+            return validateAndReturn(cached.get(), courseId, userId);
         }
 
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> {
-                    log.warn("존재하지 않는 강의 조회 - 강의 ID: {}", courseId);
-                    return new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
-                });
-
-        Long ownerUserId = course.getCreatorProfile().getUser().getId();
-        if (course.getStatus() == CourseStatus.DRAFT && !ownerUserId.equals(userId)) {
-            log.warn("타인의 DRAFT 강의 조회 시도 - 강의 ID: {}, 요청자 ID: {}", courseId, userId);
+        if (courseCacheRepository.isNullCached(courseId)) {
+            log.debug("강의 null 캐시 히트 - 강의 ID: {}", courseId);
             throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
         }
 
-        CourseDetailDto dto = CourseDetailDto.of(course, enrollmentCountRepository.getEnrollmentCount(courseId));
-        if (course.getStatus() != CourseStatus.DRAFT) {
-            courseCacheRepository.save(dto);
+        return loadFromDbWithLock(courseId, userId);
+    }
+
+    private CourseDetailDto loadFromDbWithLock(Long courseId, Long userId) {
+        if (!courseCacheRepository.tryLock(courseId)) {
+            log.debug("락 획득 실패, 캐시 재조회 - 강의 ID: {}", courseId);
+            Optional<CourseDetailDto> retried = courseCacheRepository.findById(courseId);
+            if (retried.isPresent()) {
+                return validateAndReturn(retried.get(), courseId, userId);
+            }
+            if (courseCacheRepository.isNullCached(courseId)) {
+                throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
+            }
         }
+
+        try {
+            Optional<CourseDetailDto> doubleChecked = courseCacheRepository.findById(courseId);
+            if (doubleChecked.isPresent()) {
+                return validateAndReturn(doubleChecked.get(), courseId, userId);
+            }
+
+            Optional<Course> found = courseRepository.findById(courseId);
+            if (found.isEmpty()) {
+                log.warn("존재하지 않는 강의 조회 - 강의 ID: {}", courseId);
+                courseCacheRepository.saveNull(courseId);
+                throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
+            }
+
+            Course course = found.get();
+            Long ownerUserId = course.getCreatorProfile().getUser().getId();
+            if (course.getStatus() == CourseStatus.DRAFT && !ownerUserId.equals(userId)) {
+                log.warn("타인의 DRAFT 강의 조회 시도 - 강의 ID: {}, 요청자 ID: {}", courseId, userId);
+                throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
+            }
+
+            CourseDetailDto dto = CourseDetailDto.of(course, enrollmentCountRepository.getEnrollmentCount(courseId));
+            if (course.getStatus() != CourseStatus.DRAFT) {
+                courseCacheRepository.save(dto);
+            }
+            return dto;
+        } finally {
+            courseCacheRepository.releaseLock(courseId);
+        }
+    }
+
+    private CourseDetailDto validateAndReturn(CourseDetailDto dto, Long courseId, Long userId) {
+        if (dto.getStatus() == CourseStatus.DRAFT && !dto.getOwnerId().equals(userId)) {
+            log.warn("타인의 DRAFT 강의 조회 시도 (캐시) - 강의 ID: {}, 요청자 ID: {}", courseId, userId);
+            throw new CustomGlobalException(ErrorType.COURSE_NOT_FOUND);
+        }
+        log.debug("강의 캐시 히트 - 강의 ID: {}", courseId);
         return dto;
     }
 
