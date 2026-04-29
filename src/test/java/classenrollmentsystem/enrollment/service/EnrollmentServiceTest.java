@@ -32,6 +32,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +50,9 @@ class EnrollmentServiceTest {
 
     @Mock
     private EnrollmentCountRepository enrollmentCountRepository;
+
+    @Mock
+    private WaitingQueueService waitingQueueService;
 
     @InjectMocks
     private EnrollmentService enrollmentService;
@@ -146,8 +151,9 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("수강 신청 - OPEN 상태의 강의에 정원이 남아 있으면 수강 신청이 PENDING 상태로 생성된다")
+    @DisplayName("수강 신청 - 활성 토큰이 있고 OPEN 상태의 강의에 정원이 남아 있으면 수강 신청이 PENDING 상태로 생성된다")
     void enroll_success() {
+        doNothing().when(waitingQueueService).validateActiveToken(1L, 1L);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
         when(enrollmentRepository.existsByUserIdAndCourseIdAndStatusNot(1L, 1L, EnrollmentStatus.CANCELLED)).thenReturn(false);
@@ -161,8 +167,21 @@ class EnrollmentServiceTest {
     }
 
     @Test
+    @DisplayName("수강 신청 - 활성 토큰 없이 수강 신청하면 QUEUE_TOKEN_NOT_ACTIVE 예외가 발생한다")
+    void enroll_fail_no_active_token() {
+        doThrow(new CustomGlobalException(ErrorType.QUEUE_TOKEN_NOT_ACTIVE))
+                .when(waitingQueueService).validateActiveToken(1L, 1L);
+
+        assertThatThrownBy(() -> enrollmentService.enroll(1L, 1L))
+                .isInstanceOf(CustomGlobalException.class)
+                .extracting("errorType")
+                .isEqualTo(ErrorType.QUEUE_TOKEN_NOT_ACTIVE);
+    }
+
+    @Test
     @DisplayName("수강 신청 - 존재하지 않는 사용자 ID로 요청하면 USER_NOT_FOUND 예외가 발생한다")
     void enroll_fail_user_not_found() {
+        doNothing().when(waitingQueueService).validateActiveToken(1L, 999L);
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> enrollmentService.enroll(999L, 1L))
@@ -174,6 +193,7 @@ class EnrollmentServiceTest {
     @Test
     @DisplayName("수강 신청 - 존재하지 않는 강의 ID로 요청하면 COURSE_NOT_FOUND 예외가 발생한다")
     void enroll_fail_course_not_found() {
+        doNothing().when(waitingQueueService).validateActiveToken(999L, 1L);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(courseRepository.findById(999L)).thenReturn(Optional.empty());
 
@@ -186,6 +206,7 @@ class EnrollmentServiceTest {
     @Test
     @DisplayName("수강 신청 - 본인이 개설한 강의에 신청하면 ENROLLMENT_OWN_COURSE 예외가 발생한다")
     void enroll_fail_own_course() {
+        doNothing().when(waitingQueueService).validateActiveToken(1L, 2L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(creatorUser));
         when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
 
@@ -198,6 +219,7 @@ class EnrollmentServiceTest {
     @Test
     @DisplayName("수강 신청 - DRAFT 상태의 강의에 신청하면 ENROLLMENT_COURSE_NOT_OPEN 예외가 발생한다")
     void enroll_fail_draft_course_not_open() {
+        doNothing().when(waitingQueueService).validateActiveToken(2L, 1L);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(courseRepository.findById(2L)).thenReturn(Optional.of(draftCourse));
 
@@ -210,6 +232,7 @@ class EnrollmentServiceTest {
     @Test
     @DisplayName("수강 신청 - CLOSED 상태의 강의에 신청하면 ENROLLMENT_COURSE_NOT_OPEN 예외가 발생한다")
     void enroll_fail_closed_course_not_open() {
+        doNothing().when(waitingQueueService).validateActiveToken(3L, 1L);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(courseRepository.findById(3L)).thenReturn(Optional.of(closedCourse));
 
@@ -222,6 +245,7 @@ class EnrollmentServiceTest {
     @Test
     @DisplayName("수강 신청 - PENDING 상태로 이미 신청한 강의에 재신청하면 ENROLLMENT_ALREADY_EXISTS 예외가 발생한다")
     void enroll_fail_already_exists() {
+        doNothing().when(waitingQueueService).validateActiveToken(1L, 1L);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
         when(enrollmentRepository.existsByUserIdAndCourseIdAndStatusNot(1L, 1L, EnrollmentStatus.CANCELLED)).thenReturn(true);
@@ -235,6 +259,7 @@ class EnrollmentServiceTest {
     @Test
     @DisplayName("수강 신청 - 정원이 가득 찬 강의에 신청하면 ENROLLMENT_CAPACITY_EXCEEDED 예외가 발생한다")
     void enroll_fail_capacity_exceeded() {
+        doNothing().when(waitingQueueService).validateActiveToken(1L, 1L);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
         when(enrollmentRepository.existsByUserIdAndCourseIdAndStatusNot(1L, 1L, EnrollmentStatus.CANCELLED)).thenReturn(false);

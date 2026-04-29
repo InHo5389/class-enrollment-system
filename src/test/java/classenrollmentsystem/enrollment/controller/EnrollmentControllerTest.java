@@ -154,6 +154,21 @@ class EnrollmentControllerTest {
     }
 
     @Test
+    @DisplayName("수강 신청 API - 대기열 활성 토큰 없이 수강 신청하면 403을 반환한다")
+    void enroll_fail_no_active_token() throws Exception {
+        when(enrollmentService.enroll(anyLong(), anyLong()))
+                .thenThrow(new CustomGlobalException(ErrorType.QUEUE_TOKEN_NOT_ACTIVE));
+
+        mockMvc.perform(post("/api/enrollments")
+                        .header("X-User-Id", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("courseId", 1L))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(ErrorType.QUEUE_TOKEN_NOT_ACTIVE.getStatus()))
+                .andExpect(jsonPath("$.message").value(ErrorType.QUEUE_TOKEN_NOT_ACTIVE.getMessage()));
+    }
+
+    @Test
     @DisplayName("결제 확정 API - X-User-Id 헤더와 유효한 수강 신청 ID가 있으면 CONFIRMED 상태로 변경된다")
     void confirm_success() throws Exception {
         when(enrollmentService.confirm(eq(1L), eq(1L))).thenReturn(buildEnrollmentDto(EnrollmentStatus.CONFIRMED));

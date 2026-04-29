@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -52,6 +53,9 @@ class EnrollmentServiceConcurrencyTest {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
+    @Autowired
+    private WaitingQueueRepository waitingQueueRepository;
+
     private static final int NUMBER_OF_THREADS = 100;
 
     private Course course;
@@ -64,7 +68,7 @@ class EnrollmentServiceConcurrencyTest {
         creatorProfileJpaRepository.deleteAll();
         userJpaRepository.deleteAll();
 
-        redisTemplate.execute((org.springframework.data.redis.connection.RedisConnection connection) -> {
+        redisTemplate.execute((RedisConnection connection) -> {
             connection.serverCommands().flushAll();
             return null;
         });
@@ -84,8 +88,11 @@ class EnrollmentServiceConcurrencyTest {
                 .build());
 
         users = new ArrayList<>();
+        long expiredAt = System.currentTimeMillis() + (5 * 60 * 1000L);
         for (int i = 0; i < NUMBER_OF_THREADS; i++) {
-            users.add(userJpaRepository.save(User.create("user" + i + "@example.com", "hashedPassword", "User" + i)));
+            User user = userJpaRepository.save(User.create("user" + i + "@example.com", "hashedPassword", "User" + i));
+            users.add(user);
+            waitingQueueRepository.addToActiveQueue(course.getId(), user.getId(), expiredAt);
         }
     }
 
