@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class CourseServiceTest {
@@ -416,6 +417,108 @@ class CourseServiceTest {
                 .isEqualTo(ErrorType.COURSE_NOT_FOUND);
 
         verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (Cache Penetration) - null 캐시 히트 시 DB를 조회하지 않고 COURSE_NOT_FOUND 예외가 발생한다")
+    void getCourse_null_cache_hit_skips_db() {
+        when(courseCacheRepository.findById(999L)).thenReturn(Optional.empty());
+        when(courseCacheRepository.isNullCached(999L)).thenReturn(true);
+
+        assertThatThrownBy(() -> courseService.getCourse(999L, 1L))
+                .isInstanceOf(CustomGlobalException.class)
+                .extracting("errorType")
+                .isEqualTo(ErrorType.COURSE_NOT_FOUND);
+
+        verify(courseRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (Cache Penetration) - DB에 없는 강의를 조회하면 null을 캐시에 저장한다")
+    void getCourse_db_miss_saves_null_cache() {
+        when(courseCacheRepository.findById(999L)).thenReturn(Optional.empty());
+        when(courseCacheRepository.isNullCached(999L)).thenReturn(false);
+        when(courseCacheRepository.tryLock(999L)).thenReturn(true);
+        when(courseRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> courseService.getCourse(999L, 1L))
+                .isInstanceOf(CustomGlobalException.class)
+                .extracting("errorType")
+                .isEqualTo(ErrorType.COURSE_NOT_FOUND);
+
+        verify(courseCacheRepository).saveNull(999L);
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (Hot Key) - 락 획득 성공 후 DB 조회 결과를 캐시에 저장한다")
+    void getCourse_lock_acquired_loads_db_and_caches() {
+        Course openCourse = Course.builder()
+                .id(1L)
+                .creatorProfile(creatorProfile)
+                .title("Spring Boot 완벽 가이드")
+                .description("초급부터 고급까지")
+                .price(new BigDecimal("49900"))
+                .maxCapacity(30)
+                .startDate(LocalDate.of(2026, 5, 1))
+                .endDate(LocalDate.of(2026, 6, 30))
+                .status(CourseStatus.OPEN)
+                .build();
+
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.empty());
+        when(courseCacheRepository.isNullCached(1L)).thenReturn(false);
+        when(courseCacheRepository.tryLock(1L)).thenReturn(true);
+        when(courseRepository.findById(1L)).thenReturn(Optional.of(openCourse));
+        when(enrollmentCountRepository.getEnrollmentCount(1L)).thenReturn(0);
+
+        CourseDetailDto result = courseService.getCourse(1L, null);
+
+        assertThat(result.getTitle()).isEqualTo("Spring Boot 완벽 가이드");
+        verify(courseCacheRepository).save(any(CourseDetailDto.class));
+        verify(courseCacheRepository).releaseLock(1L);
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (Hot Key) - 락 획득 실패 시 캐시 재조회 후 캐시 히트 결과를 반환한다")
+    void getCourse_lock_failed_retries_cache_and_hits() {
+        CourseDetailDto cachedAfterLock = CourseDetailDto.builder()
+                .id(1L)
+                .ownerId(1L)
+                .creatorName("Creator")
+                .creatorBio("강의 소개")
+                .title("Spring Boot 완벽 가이드")
+                .price(new BigDecimal("49900"))
+                .maxCapacity(30)
+                .currentEnrollment(0)
+                .startDate(LocalDate.of(2026, 5, 1))
+                .endDate(LocalDate.of(2026, 6, 30))
+                .status(CourseStatus.OPEN)
+                .build();
+
+        when(courseCacheRepository.findById(1L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(cachedAfterLock));
+        when(courseCacheRepository.isNullCached(1L)).thenReturn(false);
+        when(courseCacheRepository.tryLock(1L)).thenReturn(false);
+
+        CourseDetailDto result = courseService.getCourse(1L, null);
+
+        assertThat(result.getTitle()).isEqualTo("Spring Boot 완벽 가이드");
+        verify(courseRepository, never()).findById(any());
+        verify(courseCacheRepository, times(2)).findById(1L);
+    }
+
+    @Test
+    @DisplayName("강의 상세 조회 (Hot Key) - DB 조회 중 예외 발생 시 락이 반드시 해제된다")
+    void getCourse_lock_released_even_on_exception() {
+        when(courseCacheRepository.findById(1L)).thenReturn(Optional.empty());
+        when(courseCacheRepository.isNullCached(1L)).thenReturn(false);
+        when(courseCacheRepository.tryLock(1L)).thenReturn(true);
+        when(courseRepository.findById(1L)).thenThrow(new RuntimeException("DB 장애"));
+
+        assertThatThrownBy(() -> courseService.getCourse(1L, 1L))
+                .isInstanceOf(RuntimeException.class);
+
+        verify(courseCacheRepository).releaseLock(1L);
     }
 
     // ========================
